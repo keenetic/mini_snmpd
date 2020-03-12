@@ -278,8 +278,10 @@ static int decode_snmp_request(request_t *request, client_t *client)
 	const char *version_msg = "SNMP version";
 
 	/* The SNMP message is enclosed in a sequence */
-	if (decode_len(client->packet, client->size, &pos, &type, &len) == -1)
+	if (decode_len(client->packet, client->size, &pos, &type, &len) == -1) {
+		lprintf(LOG_DEBUG, "%s invalid message length", header_msg);
 		return -1;
+	}
 
 	if (type != BER_TYPE_SEQUENCE || len != (client->size - pos)) {
 		lprintf(LOG_DEBUG, "%s type %02X length %zu\n", header_msg, type, len);
@@ -288,8 +290,10 @@ static int decode_snmp_request(request_t *request, client_t *client)
 	}
 
 	/* The first element of the sequence is the version */
-	if (decode_len(client->packet, client->size, &pos, &type, &len) == -1)
+	if (decode_len(client->packet, client->size, &pos, &type, &len) == -1) {
+		lprintf(LOG_DEBUG, "%s invalid first element length", header_msg);
 		return -1;
+	}
 
 	if (type != BER_TYPE_INTEGER || len != 1) {
 		lprintf(LOG_DEBUG, "Unexpected %s type %02X length %zu\n", version_msg, type, len);
@@ -297,8 +301,10 @@ static int decode_snmp_request(request_t *request, client_t *client)
 		return -1;
 	}
 
-	if (decode_int(client->packet, client->size, &pos, len, &request->version) == -1)
+	if (decode_int(client->packet, client->size, &pos, len, &request->version) == -1) {
+		lprintf(LOG_DEBUG, "%s invalid version length", version_msg);
 		return -1;
+	}
 
 	if (request->version != SNMP_VERSION_1 && request->version != SNMP_VERSION_2C) {
 		lprintf(LOG_DEBUG, "Unsupported %s %d\n", version_msg, request->version);
@@ -307,8 +313,10 @@ static int decode_snmp_request(request_t *request, client_t *client)
 	}
 
 	/* The second element of the sequence is the community string */
-	if (decode_len(client->packet, client->size, &pos, &type, &len) == -1)
+	if (decode_len(client->packet, client->size, &pos, &type, &len) == -1) {
+		lprintf(LOG_DEBUG, "%s invalid string length", commun_msg);
 		return -1;
+	}
 
 	if (type != BER_TYPE_OCTET_STRING || len >= sizeof(request->community)) {
 		lprintf(LOG_DEBUG, "Unexpected %s type %02X length %zu\n", commun_msg, type, len);
@@ -316,8 +324,10 @@ static int decode_snmp_request(request_t *request, client_t *client)
 		return -1;
 	}
 
-	if (decode_str(client->packet, client->size, &pos, len, request->community, sizeof(request->community)) == -1)
+	if (decode_str(client->packet, client->size, &pos, len, request->community, sizeof(request->community)) == -1) {
+		lprintf(LOG_DEBUG, "%s invalid string", commun_msg);
 		return -1;
+	}
 
 	if (strlen(request->community) < 1) {
 		lprintf(LOG_DEBUG, "unsupported %s '%s'\n", commun_msg, request->community);
@@ -326,8 +336,10 @@ static int decode_snmp_request(request_t *request, client_t *client)
 	}
 
 	/* The third element of the sequence is the SNMP request */
-	if (decode_len(client->packet, client->size, &pos, &type, &len) == -1)
+	if (decode_len(client->packet, client->size, &pos, &type, &len) == -1) {
+		lprintf(LOG_DEBUG, "%s invalid length", request_msg);
 		return -1;
+	}
 
 	if (len != (client->size - pos)) {
 		lprintf(LOG_DEBUG, "%s type type %02X length %zu\n", request_msg, type, len);
@@ -337,8 +349,10 @@ static int decode_snmp_request(request_t *request, client_t *client)
 	request->type = type;
 
 	/* The first element of the SNMP request is the request ID */
-	if (decode_len(client->packet, client->size, &pos, &type, &len) == -1)
+	if (decode_len(client->packet, client->size, &pos, &type, &len) == -1) {
+		lprintf(LOG_DEBUG, "%s invalid request length", request_msg);
 		return -1;
+	}
 
 	if (type != BER_TYPE_INTEGER || len < 1) {
 		lprintf(LOG_DEBUG, "%s id type %02X length %zu\n", request_msg, type, len);
@@ -346,12 +360,16 @@ static int decode_snmp_request(request_t *request, client_t *client)
 		return -1;
 	}
 
-	if (decode_int(client->packet, client->size, &pos, len, &request->id) == -1)
+	if (decode_int(client->packet, client->size, &pos, len, &request->id) == -1) {
+		lprintf(LOG_DEBUG, "%s invalid int", request_msg);
 		return -1;
+	}
 
 	/* The second element of the SNMP request is the error state / non repeaters (0..2147483647) */
-	if (decode_len(client->packet, client->size, &pos, &type, &len) == -1)
+	if (decode_len(client->packet, client->size, &pos, &type, &len) == -1) {
+		lprintf(LOG_DEBUG, "%s invalid length", error_msg);
 		return -1;
+	}
 
 	if (type != BER_TYPE_INTEGER || len < 1) {
 		lprintf(LOG_DEBUG, "%s state type %02X length %zu\n", error_msg, type, len);
@@ -359,12 +377,16 @@ static int decode_snmp_request(request_t *request, client_t *client)
 		return -1;
 	}
 
-	if (decode_cnt(client->packet, client->size, &pos, len, &request->non_repeaters) == -1)
+	if (decode_cnt(client->packet, client->size, &pos, len, &request->non_repeaters) == -1) {
+		lprintf(LOG_DEBUG, "%s invalid ctr value", error_msg);
 		return -1;
+	}
 
 	/* The third element of the SNMP request is the error index / max repetitions (0..2147483647) */
-	if (decode_len(client->packet, client->size, &pos, &type, &len) == -1)
+	if (decode_len(client->packet, client->size, &pos, &type, &len) == -1) {
+		lprintf(LOG_DEBUG, "%s invalid max rep length", error_msg);
 		return -1;
+	}
 
 	if (type != BER_TYPE_INTEGER || len < 1) {
 		lprintf(LOG_DEBUG, "%s index type %02X length %zu\n", error_msg, type, len);
@@ -372,12 +394,16 @@ static int decode_snmp_request(request_t *request, client_t *client)
 		return -1;
 	}
 
-	if (decode_cnt(client->packet, client->size, &pos, len, &request->max_repetitions) == -1)
+	if (decode_cnt(client->packet, client->size, &pos, len, &request->max_repetitions) == -1) {
+		lprintf(LOG_DEBUG, "%s invalid max rep value", error_msg);
 		return -1;
+	}
 
 	/* The fourth element of the SNMP request are the variable bindings */
-	if (decode_len(client->packet, client->size, &pos, &type, &len) == -1)
+	if (decode_len(client->packet, client->size, &pos, &type, &len) == -1) {
+		lprintf(LOG_DEBUG, "%s invalid bind length", error_msg);
 		return -1;
+	}
 
 	if (type != BER_TYPE_SEQUENCE || len != (client->size - pos)) {
 		lprintf(LOG_DEBUG, "%s type %02X length %zu\n", varbind_msg, type, len);
@@ -396,8 +422,10 @@ static int decode_snmp_request(request_t *request, client_t *client)
 		}
 
 		/* Each variable binding is a sequence describing the variable */
-		if (decode_len(client->packet, client->size, &pos, &type, &len) == -1)
+		if (decode_len(client->packet, client->size, &pos, &type, &len) == -1) {
+			lprintf(LOG_DEBUG, "%s invalid length", varbind_msg);
 			return -1;
+		}
 
 		if (type != BER_TYPE_SEQUENCE || len < 1) {
 			lprintf(LOG_DEBUG, "%s type %02X length %zu\n", varbind_msg, type, len);
@@ -406,8 +434,10 @@ static int decode_snmp_request(request_t *request, client_t *client)
 		}
 
 		/* The first element of the variable binding is the OID */
-		if (decode_len(client->packet, client->size, &pos, &type, &len) == -1)
+		if (decode_len(client->packet, client->size, &pos, &type, &len) == -1) {
+			lprintf(LOG_DEBUG, "%s invalid first elemenet length", varbind_msg);
 			return -1;
+		}
 
 		if (type != BER_TYPE_OID || len < 1) {
 			lprintf(LOG_DEBUG, "%s OID type %02X length %zu\n", varbind_msg, type, len);
@@ -415,12 +445,16 @@ static int decode_snmp_request(request_t *request, client_t *client)
 			return -1;
 		}
 
-		if (decode_oid(client->packet, client->size, &pos, len, &request->oid_list[request->oid_list_length]) == -1)
+		if (decode_oid(client->packet, client->size, &pos, len, &request->oid_list[request->oid_list_length]) == -1) {
+			lprintf(LOG_DEBUG, "%s invalid OID", varbind_msg);
 			return -1;
+		}
 
 		/* The second element of the variable binding is the new type and value */
-		if (decode_len(client->packet, client->size, &pos, &type, &len) == -1)
+		if (decode_len(client->packet, client->size, &pos, &type, &len) == -1) {
+			lprintf(LOG_DEBUG, "%s invalid second element length", varbind_msg);
 			return -1;
+		}
 
 		if ((type == BER_TYPE_NULL && len) || (type != BER_TYPE_NULL && !len)) {
 			lprintf(LOG_DEBUG, "%s value type %02X length %zu\n", varbind_msg, type, len);
@@ -428,8 +462,10 @@ static int decode_snmp_request(request_t *request, client_t *client)
 			return -1;
 		}
 
-		if (decode_ptr(client->packet, client->size, &pos, len) == -1)
+		if (decode_ptr(client->packet, client->size, &pos, len) == -1) {
+			lprintf(LOG_DEBUG, "%s invalid ptr", varbind_msg);
 			return -1;
+		}
 
 		/* Now the OID list has one more entry */
 		request->oid_list_length++;
