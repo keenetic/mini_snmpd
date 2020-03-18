@@ -416,8 +416,8 @@ static int decode_snmp_request(request_t *request, client_t *client)
 	while (pos < client->size) {
 		/* If there is not enough room in the OID list, bail out now */
 		if (request->oid_list_length >= MAX_NR_OIDS) {
-			lprintf(LOG_DEBUG, "Overflow in OID list\n");
-			errno = EFAULT;
+			lprintf(LOG_WARNING, "Too large varbind OID list, support only %d per request\n", MAX_NR_OIDS);
+			errno = E2BIG;
 			return -1;
 		}
 

@@ -50,7 +50,7 @@
 #define EXIT_SYSCALL                                    2
 
 #define MAX_NR_CLIENTS                                  16
-#define MAX_NR_OIDS                                     20
+#define MAX_NR_OIDS                                     70
 #define MAX_NR_SUBIDS                                   20
 #define MAX_NR_DISKS                                    64
 #define MAX_NR_INTERFACES                               64
