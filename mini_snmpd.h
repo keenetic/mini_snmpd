@@ -51,10 +51,10 @@
 
 #define MAX_NR_CLIENTS                                  16
 #define MAX_NR_OIDS                                     70
-#define MAX_NR_SUBIDS                                   20
-#define MAX_NR_DISKS                                    64
-#define MAX_NR_INTERFACES                               64
-#define MAX_NR_VALUES                                   2048
+#define MAX_NR_SUBIDS                                   25
+#define MAX_NR_DISKS                                    32
+#define MAX_NR_INTERFACES                               96
+#define MAX_NR_VALUES                                   4096
 
 #define MAX_PACKET_SIZE                                 2048
 #define MAX_STRING_SIZE                                 64
