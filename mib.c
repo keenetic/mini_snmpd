@@ -988,13 +988,13 @@ int mib_build(void)
 
 	for (i = 0; i < g_interface_list_length; ++i) {
 		if (g_interface_list[i] == NULL) {
-			lprintf(LOG_ERR, "unable to acquire interface %u", i);
+			lprintf(LOG_ERR, "unable to acquire interface %zu", i);
 
 			return -1;
 		}
 	}
 
-	lprintf(LOG_INFO, "build IF-MIB for %u interfaces", g_interface_list_length);
+	lprintf(LOG_INFO, "build IF-MIB for %zu interfaces", g_interface_list_length);
 
 	if (mib_build_entry(&m_if_1_oid, 1, 0, BER_TYPE_INTEGER, (const void *)(intptr_t)g_interface_list_length) == -1)
 		return -1;
@@ -1434,7 +1434,7 @@ int mib_build(void)
 
 	if (g_disk_list_length > 0) {
 
-		lprintf(LOG_INFO, "build UCD-SNMP-MIB for %u disks", g_disk_list_length);
+		lprintf(LOG_INFO, "build UCD-SNMP-MIB for %zu disks", g_disk_list_length);
 
 		for (i = 0; i < g_disk_list_length; i++) {
 			if (mib_build_entry(&m_disk_oid, 1, i + 1, BER_TYPE_INTEGER, (const void *)(intptr_t)(i + 1)) == -1)
