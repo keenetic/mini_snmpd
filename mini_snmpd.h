@@ -166,6 +166,9 @@ typedef struct client_s {
 	int                 sockfd;
 	struct my_in_addr_t addr;
 	my_in_port_t        port;
+	struct in_addr      local_addr4;
+	struct in6_addr     local_addr6;
+	my_in_port_t        local_port;
 	unsigned char       packet[MAX_PACKET_SIZE];
 	size_t              size;
 	int                 outgoing;

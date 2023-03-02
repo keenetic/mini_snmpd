@@ -37,6 +37,9 @@
 #include "mini_snmpd.h"
 
 #ifdef NDM
+
+#include <ndm/sys.h>
+
 static void ndm_core_close_()
 {
 	ndm_atexit_core_close_(NULL);
@@ -95,24 +98,81 @@ static void handle_signal(int UNUSED(signo))
 	g_quit = 1;
 }
 
+struct in6_pktinfo_ {
+	struct in6_addr	ipi6_addr;
+	int		ipi6_ifindex;
+};
+
 static void handle_udp_client(void)
 {
 	const char *req_msg = "Failed UDP request from";
 	const char *snd_msg = "Failed UDP response to";
 	struct my_sockaddr_t sockaddr;
-	my_socklen_t socklen;
+	my_socklen_t socklen = sizeof(sockaddr);
 	ssize_t rv;
 	char straddr[my_inet_addrstrlen] = { 0 };
+	char cmbuf[
+			CMSG_SPACE(sizeof(struct in_pktinfo)) +
+			CMSG_SPACE(sizeof(struct sockaddr_in)) +
+			CMSG_SPACE(sizeof(struct in6_pktinfo_)) +
+			CMSG_SPACE(sizeof(struct sockaddr_in6))];
+	struct iovec iov[1];
+	struct msghdr mh =
+	{
+		.msg_name = &sockaddr,
+		.msg_namelen = socklen,
+		.msg_iov = iov,
+		.msg_iovlen = 1,
+		.msg_control = cmbuf,
+		.msg_controllen = sizeof(cmbuf)
+	};
 
 	memset(&sockaddr, 0, sizeof(sockaddr));
+	memset(cmbuf, 0, sizeof(cmbuf));
+	memset(&g_udp_client.local_addr4, 0, sizeof(g_udp_client.local_addr4));
+	memset(&g_udp_client.local_addr6, 0, sizeof(g_udp_client.local_addr6));
+	g_udp_client.local_port = 0;
+
+	iov[0].iov_base = g_udp_client.packet;
+	iov[0].iov_len = sizeof(g_udp_client.packet);
 
 	/* Read the whole UDP packet from the socket at once */
-	socklen = sizeof(sockaddr);
-	rv = recvfrom(g_udp_sockfd, g_udp_client.packet, sizeof(g_udp_client.packet),
-		      0, (struct sockaddr *)&sockaddr, &socklen);
+    rv = recvmsg(g_udp_sockfd, &mh, MSG_DONTWAIT);
+
 	if (rv == -1) {
 		lprintf(LOG_WARNING, "Failed receiving UDP request on port %d: %m\n", g_udp_port);
 		return;
+	}
+
+	for ( struct cmsghdr *cmsg = CMSG_FIRSTHDR(&mh)
+		; cmsg != NULL
+		; cmsg = CMSG_NXTHDR(&mh, cmsg)) {
+
+		if (cmsg->cmsg_level == IPPROTO_IP) {
+			if (cmsg->cmsg_type == IP_PKTINFO) {
+				struct in_pktinfo *pi = (struct in_pktinfo *)CMSG_DATA(cmsg);
+
+				g_udp_client.local_addr4 = pi->ipi_addr;
+			} else
+			if (cmsg->cmsg_type == IP_ORIGDSTADDR) {
+				struct sockaddr_in *sin = (struct sockaddr_in *)CMSG_DATA(cmsg);
+
+				g_udp_client.local_port = sin->sin_port;
+			}
+		} else
+		if (cmsg->cmsg_level == IPPROTO_IPV6) {
+			if (cmsg->cmsg_type == IPV6_PKTINFO) {
+				struct in6_pktinfo_ *pi = (struct in6_pktinfo_ *)CMSG_DATA(cmsg);
+
+				g_udp_client.local_addr6 = pi->ipi6_addr;
+			} else
+			if (cmsg->cmsg_type == IPV6_ORIGDSTADDR) {
+				struct sockaddr_in6 *sin6 =
+					(struct sockaddr_in6 *)CMSG_DATA(cmsg);
+
+				g_udp_client.local_port = sin6->sin6_port;
+			}
+		}
 	}
 
 	g_udp_client.timestamp = time(NULL);
@@ -138,8 +198,78 @@ static void handle_udp_client(void)
 	g_udp_client.outgoing = 1;
 
 	/* Send the whole UDP packet to the socket at once */
-	rv = sendto(g_udp_sockfd, g_udp_client.packet, g_udp_client.size,
-		MSG_DONTWAIT, (struct sockaddr *)&sockaddr, socklen);
+
+	if (g_udp_client.local_addr4.s_addr != 0) {
+		char cmsbuf[CMSG_SPACE(sizeof(struct in_pktinfo))];
+		struct iovec iovs[1];
+		struct msghdr mhs;
+		struct cmsghdr *cmsg;
+		struct in_pktinfo *pktinfo;
+
+		memset(cmsbuf, 0, CMSG_SPACE(sizeof(struct in_pktinfo)));
+		iovs[0].iov_base = g_udp_client.packet;
+		iovs[0].iov_len = g_udp_client.size;
+		memset(&mhs, 0, sizeof(mhs));
+
+		mhs.msg_name = (struct sockaddr*) &sockaddr;
+		mhs.msg_namelen = socklen;
+		mhs.msg_control = cmsbuf;
+		mhs.msg_controllen = sizeof(cmsbuf);
+		mhs.msg_flags = 0;
+		mhs.msg_iov = iovs;
+		mhs.msg_iovlen = 1;
+
+		cmsg = CMSG_FIRSTHDR(&mhs);
+		cmsg->cmsg_level = IPPROTO_IP;
+		cmsg->cmsg_type = IP_PKTINFO;
+		cmsg->cmsg_len = CMSG_LEN(sizeof(struct in_pktinfo));
+		pktinfo = (struct in_pktinfo*) CMSG_DATA(cmsg);
+
+		pktinfo->ipi_ifindex = 0;
+		pktinfo->ipi_spec_dst = g_udp_client.local_addr4;
+
+		rv = sendmsg(g_udp_sockfd, &mhs, MSG_DONTWAIT);
+	} else
+	if (g_udp_client.local_addr6.s6_addr32[0] != 0 ||
+		g_udp_client.local_addr6.s6_addr32[1] != 0 ||
+		g_udp_client.local_addr6.s6_addr32[2] != 0 ||
+		g_udp_client.local_addr6.s6_addr32[3] != 0) {
+
+		char cmsbuf[CMSG_SPACE(sizeof(struct in6_pktinfo_))];
+		struct iovec iovs[1];
+		struct msghdr mhs;
+		struct cmsghdr *cmsg;
+		struct in6_pktinfo_ *pktinfo;
+
+		memset(cmsbuf, 0, CMSG_SPACE(sizeof(struct in6_pktinfo_)));
+		iovs[0].iov_base = g_udp_client.packet;
+		iovs[0].iov_len = g_udp_client.size;
+		memset(&mhs, 0, sizeof(mhs));
+
+		mhs.msg_name = (struct sockaddr*) &sockaddr;
+		mhs.msg_namelen = socklen;
+		mhs.msg_control = cmsbuf;
+		mhs.msg_controllen = sizeof(cmsbuf);
+		mhs.msg_flags = 0;
+		mhs.msg_iov = iovs;
+		mhs.msg_iovlen = 1;
+
+		cmsg = CMSG_FIRSTHDR(&mhs);
+		cmsg->cmsg_level = IPPROTO_IPV6;
+		cmsg->cmsg_type = IPV6_PKTINFO;
+		cmsg->cmsg_len = CMSG_LEN(sizeof(struct in6_pktinfo_));
+		pktinfo = (struct in6_pktinfo_*) CMSG_DATA(cmsg);
+
+		pktinfo->ipi6_ifindex = 0;
+		pktinfo->ipi6_addr = g_udp_client.local_addr6;
+
+		rv = sendmsg(g_udp_sockfd, &mhs, MSG_DONTWAIT);
+	} else
+	{
+		rv = sendto(g_udp_sockfd, g_udp_client.packet, g_udp_client.size,
+			MSG_DONTWAIT, (struct sockaddr *)&sockaddr, socklen);
+	}
+
 	inet_ntop(my_af_inet, &sockaddr.my_sin_addr, straddr, sizeof(straddr));
 	if (rv == -1)
 		lprintf(LOG_WARNING, "%s %s:%d: %m\n", snd_msg, straddr, sockaddr.my_sin_port);
@@ -365,6 +495,7 @@ int main(int argc, char *argv[])
 		struct sockaddr_in6 sa6;
 #endif
 	} sockaddr;
+	int opt = 1;
 
 	/* Prevent TERM and HUP signals from interrupting system calls */
 	sig.sa_handler = handle_signal;
@@ -503,7 +634,7 @@ int main(int argc, char *argv[])
 	/* Open the server's UDP port and prepare it for listening */
 	g_udp_sockfd = socket((g_family == AF_INET) ? PF_INET : PF_INET6, SOCK_DGRAM, 0);
 	if (g_udp_sockfd == -1) {
-		lprintf(LOG_ERR, "could not create UDP socket: %m\n");
+		lprintf(LOG_ERR, "could not create UDP socket: %s\n", ndm_sys_strerror(errno));
 		exit(EXIT_SYSCALL);
 	}
 
@@ -512,6 +643,16 @@ int main(int argc, char *argv[])
 		sockaddr.sa.sin_port = htons(g_udp_port);
 		sockaddr.sa.sin_addr = inaddr_any;
 		socklen = sizeof(sockaddr.sa);
+
+		if (setsockopt(g_udp_sockfd, IPPROTO_IP, IP_PKTINFO, &opt, sizeof(opt)) != 0) {
+			lprintf(LOG_ERR, "failed to enable ip_pktinfo on a socket: %s", ndm_sys_strerror(errno));
+			exit(EXIT_SYSCALL);
+		}
+
+		if (setsockopt(g_udp_sockfd, IPPROTO_IP, IP_RECVORIGDSTADDR, &opt, sizeof(opt)) != 0) {
+			lprintf(LOG_ERR, "failed to enable ip_pktinfo on a socket: %s", ndm_sys_strerror(errno));
+			exit(EXIT_SYSCALL);
+		}
 #ifdef CONFIG_ENABLE_IPV6
 	} else {
 		sockaddr.sa6.sin6_family = g_family;
@@ -520,6 +661,7 @@ int main(int argc, char *argv[])
 		socklen = sizeof(sockaddr.sa6);
 #endif
 	}
+
 	if (bind(g_udp_sockfd, (struct sockaddr *)&sockaddr, socklen) == -1) {
 		lprintf(LOG_ERR, "could not bind UDP socket to port %d: %m\n", g_udp_port);
 		exit(EXIT_SYSCALL);
