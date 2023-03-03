@@ -164,10 +164,16 @@
 typedef struct client_s {
 	time_t              timestamp;
 	int                 sockfd;
-	struct my_in_addr_t addr;
+	int                 af;
+	union {
+		struct in_addr  sa;
+		struct in6_addr sa6;
+	} addr;
 	my_in_port_t        port;
-	struct in_addr      local_addr4;
-	struct in6_addr     local_addr6;
+	union {
+		struct in_addr  sa;
+		struct in6_addr sa6;
+	} local_addr;
 	my_in_port_t        local_port;
 	unsigned char       packet[MAX_PACKET_SIZE];
 	size_t              size;
@@ -350,8 +356,10 @@ extern client_t  g_udp_client;
 extern client_t *g_tcp_client_list[MAX_NR_CLIENTS];
 extern size_t    g_tcp_client_list_length;
 
-extern int       g_udp_sockfd;
-extern int       g_tcp_sockfd;
+extern int       g_udp_sockfd4;
+extern int       g_udp_sockfd6;
+extern int       g_tcp_sockfd4;
+extern int       g_tcp_sockfd6;
 
 extern value_t   g_mib[MAX_NR_VALUES];
 extern size_t    g_mib_length;

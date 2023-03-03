@@ -56,8 +56,10 @@ size_t    g_interface_list_length = 0;
 in_port_t g_udp_port = 161;
 in_port_t g_tcp_port = 161;
 
-int       g_udp_sockfd = -1;
-int       g_tcp_sockfd = -1;
+int       g_udp_sockfd4 = -1;
+int       g_udp_sockfd6 = -1;
+int       g_tcp_sockfd4 = -1;
+int       g_tcp_sockfd6 = -1;
 
 client_t  g_udp_client = { 0, };
 client_t *g_tcp_client_list[MAX_NR_CLIENTS];
