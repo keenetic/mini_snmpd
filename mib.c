@@ -51,6 +51,7 @@ static const oid_t m_tcp_oid            = { { 1, 3, 6, 1, 2, 1, 6               
 static const oid_t m_udp_oid            = { { 1, 3, 6, 1, 2, 1, 7               },  7, 8  };
 static const oid_t m_host_oid           = { { 1, 3, 6, 1, 2, 1, 25, 1           },  8, 9  };
 static const oid_t m_if_ext_oid         = { { 1, 3, 6, 1, 2, 1, 31, 1, 1, 1     }, 10, 11 };
+static const oid_t m_entity_oid         = { { 1, 3, 6, 1, 2, 1, 47, 1, 1, 1     }, 10, 11 }; 
 static const oid_t m_memory_oid         = { { 1, 3, 6, 1, 4, 1, 2021, 4,        },  8, 10 };
 static const oid_t m_disk_oid           = { { 1, 3, 6, 1, 4, 1, 2021, 9, 1      },  9, 11 };
 static const oid_t m_load_oid           = { { 1, 3, 6, 1, 4, 1, 2021, 10, 1     },  9, 11 };
@@ -1378,6 +1379,13 @@ int mib_build(void)
 			if (mib_build_entry(&m_if_ext_oid, 19, i + 1, BER_TYPE_TIME_TICKS, (const void *)(intptr_t)0) == -1)
 				return -1;
 		}
+	}
+
+	if (mib_build_entry(&m_entity_oid, 1, 11, BER_TYPE_OCTET_STRING, g_serial ?: "") == -1 ||
+	    mib_build_entry(&m_entity_oid, 1, 12, BER_TYPE_OCTET_STRING, g_mfg ?: "") == -1 ||
+	    mib_build_entry(&m_entity_oid, 1, 13, BER_TYPE_OCTET_STRING, g_model ?: "") == -1 ||
+	    mib_build_entry(&m_entity_oid, 1, 19, BER_TYPE_OCTET_STRING, g_cid ?: "") == -1) {
+		return -1;
 	}
 
 	/*

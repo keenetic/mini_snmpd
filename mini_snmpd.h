@@ -333,6 +333,10 @@ extern char     *g_vendor;
 extern char     *g_location;
 extern char     *g_contact;
 extern char     *g_bind_to_device;
+extern char     *g_serial;
+extern char     *g_mfg;
+extern char     *g_model;
+extern char     *g_cid;
 
 extern char     *g_disk_list[MAX_NR_DISKS];
 extern size_t    g_disk_list_length;

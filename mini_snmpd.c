@@ -501,7 +501,7 @@ static void handle_tcp_client_read(client_t *client)
 
 int main(int argc, char *argv[])
 {
-	static const char short_options[] = "p:P:c:D:V:L:C:d:i:t:T:ansvh"
+	static const char short_options[] = "p:P:c:D:V:L:C:d:i:t:T:S:G:M:U:ansvh"
 #ifndef __FreeBSD__
 		"I:"
 #endif
@@ -605,6 +605,22 @@ int main(int argc, char *argv[])
 
 			case 'C':
 				g_contact = strdup(optarg);
+				break;
+
+			case 'S':
+				g_serial = strdup(optarg);
+				break;
+
+			case 'G':
+				g_mfg = strdup(optarg);
+				break;
+
+			case 'M':
+				g_model = strdup(optarg);
+				break;
+
+			case 'U':
+				g_cid = strdup(optarg);
 				break;
 #ifndef __FreeBSD__
 			case 'I':
