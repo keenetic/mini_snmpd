@@ -219,7 +219,6 @@ void get_diskinfo(diskinfo_t *diskinfo)
 	}
 }
 
-#ifdef NDM
 static void get_netinfo_loopback(netinfo_t *netinfo)
 {
 	int fd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -250,7 +249,7 @@ static void get_netinfo_loopback(netinfo_t *netinfo)
 	}
 
 	netinfo->admin_status[NDM_LOOPBACK_INDEX_] = 1; // up
-	netinfo->mtu[NDM_LOOPBACK_INDEX_] = g_interface_mtu[NDM_LOOPBACK_INDEX_];
+	netinfo->mtu[NDM_LOOPBACK_INDEX_] = g_ifaces_list[NDM_LOOPBACK_INDEX_].mtu;
 
 	if (fd != -1)
 		close(fd);
@@ -260,7 +259,6 @@ static void get_netinfo_loopback(netinfo_t *netinfo)
 
 	free(fields.prefix);
 }
-
 
 void get_netinfo(netinfo_t *netinfo)
 {
@@ -273,14 +271,12 @@ void get_netinfo(netinfo_t *netinfo)
 	for (i = 0; i < g_interface_list_length; ++i) {
 		char request[128];
 
-		if( !strcmp(g_interface_list[i], NDM_LOOPBACK_IFACE_) )
-		{
+		if (!strcmp(g_ifaces_list[i].iface, NDM_LOOPBACK_IFACE_))
 			continue;
-		}
 
 		/* Perform first 'show interface Iface0' request */
 
-		snprintf(request, sizeof(request), "show interface %s", g_interface_list[i]);
+		snprintf(request, sizeof(request), "show interface %s", g_ifaces_list[i].iface);
 
 		if ((g_ndmresp = ndm_core_request(g_ndmcore,
 				NDM_CORE_REQUEST_PARSE, NDM_CORE_MODE_CACHE, NULL,
@@ -297,139 +293,162 @@ void get_netinfo(netinfo_t *netinfo)
 			ndm_core_response_free(&g_ndmresp);
 
 			exit(EXIT_SYSCALL);
-		} else
+		}
+
+		const struct ndm_xml_node_t* root = ndm_core_response_root(g_ndmresp);
+
+		if (root == NULL) {
+			lprintf(LOG_ERR, "(%s:%d) null ndm response", __FILE__, __LINE__);
+			ndm_core_response_free(&g_ndmresp);
+
+			exit(EXIT_SYSCALL);
+		}
+
+		if (ndm_xml_node_type(root) != NDM_XML_NODE_TYPE_ELEMENT)
+			continue;
+
+		if( !strcmp(ndm_xml_node_name(root), "response") )
 		{
-			const struct ndm_xml_node_t* root = ndm_core_response_root(g_ndmresp);
+			const struct ndm_xml_node_t* node =
+				ndm_xml_node_first_child(root, NULL);
+			int admin_status = 2; // down
+			int ilink = 0;
+			int connected = 0;
+			int imtu = NDM_MIN_MTU_;
+			int is_port = 0;
 
-			if (root == NULL) {
-				lprintf(LOG_ERR, "(%s:%d) null ndm response", __FILE__, __LINE__);
-				ndm_core_response_free(&g_ndmresp);
+			while (node != NULL) {
+				const char *cn = ndm_xml_node_name(node);
+				const char *cv = ndm_xml_node_value(node);
 
-				exit(EXIT_SYSCALL);
-			} else {
-				if( ndm_xml_node_type(root) == NDM_XML_NODE_TYPE_ELEMENT )
+				if( !strcmp(cn, "id") &&
+					!strcmp(cn, g_ifaces_list[i].iface) )
 				{
-					if( !strcmp(ndm_xml_node_name(root), "response") )
-					{
-						const struct ndm_xml_node_t* node =
-							ndm_xml_node_first_child(root, NULL);
-						int admin_status = 2; // down
-						int ilink = 0;
-						int connected = 0;
-						int imtu = NDM_MIN_MTU_;
-						int is_port = 0;
+					lprintf(LOG_ERR, "(%s:%d) invalid interface returned", __FILE__, __LINE__);
+					ndm_core_response_free(&g_ndmresp);
 
-						while (node != NULL) {
-							if( !strcmp(ndm_xml_node_name(node), "id") &&
-								!strcmp(ndm_xml_node_name(node), g_interface_list[i]) )
-							{
-								lprintf(LOG_ERR, "(%s:%d) invalid interface returned", __FILE__, __LINE__);
-								ndm_core_response_free(&g_ndmresp);
-
-								exit(EXIT_SYSCALL);
-							}
-
-							if( !strcmp(ndm_xml_node_name(node), "interface-name") &&
-								strlen(ndm_xml_node_value(node)) > 0 )
-							{
-								if( g_interface_name_list[i] != NULL )
-								{
-									free(g_interface_name_list[i]);
-								}
-
-								g_interface_name_list[i] = strdup(ndm_xml_node_value(node));
-							}
-
-							if( !strcmp(ndm_xml_node_name(node), "type") &&
-								!strcmp(ndm_xml_node_value(node), "Port") )
-							{
-								imtu = NDM_ETH_MTU_;
-								admin_status = 1; // up
-								connected = 1; // connected
-								is_port = 1;
-							}
-
-							if( !strcmp(ndm_xml_node_name(node), "state") &&
-								!strcmp(ndm_xml_node_value(node), "up") )
-							{
-								admin_status = 1; // up
-							}
-
-							if( !strcmp(ndm_xml_node_name(node), "link") &&
-								!strcmp(ndm_xml_node_value(node), "up") )
-							{
-								ilink = 1;
-							}
-
-							if( !strcmp(ndm_xml_node_name(node), "connected") &&
-								!strcmp(ndm_xml_node_value(node), "yes") )
-							{
-								connected = 1;
-							}
-
-							if( !strcmp(ndm_xml_node_name(node), "speed") )
-							{
-								long speed = atol(ndm_xml_node_value(node));
-
-								if (speed >= 10 && speed <= 1000)
-								{
-									netinfo->speed[i] = speed * 1000 * 1000;
-								}
-							}
-
-							if( !strcmp(ndm_xml_node_name(node), "last-change") )
-							{
-								double timef = atof(ndm_xml_node_value(node));
-								long long timel = timef * 100;
-
-								if( timel >= 0 && timel <= INT_MAX )
-								{
-									netinfo->last_change[i] = timel;
-								}
-							}
-
-							if( !strcmp(ndm_xml_node_name(node), "last-overflow") )
-							{
-								double timef = atof(ndm_xml_node_value(node));
-								long long timel = timef * 100;
-
-								if( timel >= 0 && timel <= INT_MAX )
-								{
-									netinfo->discont_time[i] = timel;
-								}
-							}
-
-							if( !strcmp(ndm_xml_node_name(node), "mtu") )
-							{
-								long lmtu = atol(ndm_xml_node_value(node));
-
-								if( lmtu >= NDM_MIN_MTU_ && lmtu <= NDM_MAX_MTU_ && imtu == NDM_MIN_MTU_ )
-								{
-									imtu = lmtu;
-								}
-							}
-
-							node = ndm_xml_node_next_sibling(node, NULL);
-						}
-
-						netinfo->mtu[i] = imtu;
-						netinfo->admin_status[i] = admin_status;
-						netinfo->is_port[i] = is_port;
-
-						if( ilink == 1 && connected == 1 ) {
-							netinfo->status[i] = 1; // up
-						} else {
-							netinfo->status[i] = 2; // down
-						}
-					}
+					exit(EXIT_SYSCALL);
 				}
+
+				if( !strcmp(cn, "interface-name") && strlen(cv) > 0 )
+				{
+					if( g_ifaces_list[i].name != NULL )
+					{
+						free(g_ifaces_list[i].name);
+					}
+
+					g_ifaces_list[i].name = strdup(cv);
+					node = ndm_xml_node_next_sibling(node, NULL);
+					continue;
+				}
+
+				if( !strcmp(cn, "type") && !strcmp(cv, "Port") )
+				{
+					imtu = NDM_ETH_MTU_;
+					admin_status = 1; // up
+					connected = 1; // connected
+					is_port = 1;
+					node = ndm_xml_node_next_sibling(node, NULL);
+					continue;
+				}
+
+				if( !strcmp(cn, "state") && !strcmp(cv, "up") )
+				{
+					admin_status = 1; // up
+					node = ndm_xml_node_next_sibling(node, NULL);
+					continue;
+				}
+
+				if( !strcmp(cn, "link") && !strcmp(cv, "up") )
+				{
+					ilink = 1;
+					node = ndm_xml_node_next_sibling(node, NULL);
+					continue;
+				}
+
+				if( !strcmp(cn, "connected") && !strcmp(cv, "yes") )
+				{
+					connected = 1;
+					node = ndm_xml_node_next_sibling(node, NULL);
+					continue;
+				}
+
+				if( !strcmp(cn, "speed") )
+				{
+					const long speed = atol(cv);
+
+					if (speed >= 10 && speed <= 10000)
+					{
+						netinfo->speed[i] = speed * 1000 * 1000;
+					}
+
+					node = ndm_xml_node_next_sibling(node, NULL);
+					continue;
+				}
+
+				if( !strcmp(cn, "last-change") )
+				{
+					const double timef = atof(cv);
+					const long long timel = timef * 100;
+
+					if( timel >= 0 && timel <= INT_MAX )
+					{
+						netinfo->last_change[i] = timel;
+					}
+
+					node = ndm_xml_node_next_sibling(node, NULL);
+					continue;
+				}
+
+				if( !strcmp(cn, "last-overflow") )
+				{
+					const double timef = atof(cv);
+					const long long timel = timef * 100;
+
+					if( timel >= 0 && timel <= INT_MAX )
+					{
+						netinfo->discont_time[i] = timel;
+					}
+
+					node = ndm_xml_node_next_sibling(node, NULL);
+					continue;
+				}
+
+				if( !strcmp(cn, "mtu") )
+				{
+					const long lmtu = atol(cv);
+
+					if( lmtu >= NDM_MIN_MTU_ &&
+						lmtu <= NDM_MAX_MTU_ &&
+						imtu == NDM_MIN_MTU_ )
+					{
+						imtu = lmtu;
+					}
+
+					node = ndm_xml_node_next_sibling(node, NULL);
+					continue;
+				}
+
+				node = ndm_xml_node_next_sibling(node, NULL);
+			}
+
+			netinfo->mtu[i] = imtu;
+			netinfo->admin_status[i] = admin_status;
+			netinfo->is_port[i] = is_port;
+
+			if( ilink == 1 && connected == 1 ) {
+				netinfo->status[i] = 1; // up
+			} else {
+				netinfo->status[i] = 2; // down
 			}
 		}
+
 		ndm_core_response_free(&g_ndmresp);
 
 		/* Perform second 'show interface Iface0 stat' request */
 
-		snprintf(request, sizeof(request), "show interface %s stat", g_interface_list[i]);
+		snprintf(request, sizeof(request),
+			"show interface %s stat", g_ifaces_list[i].iface);
 
 		if ((g_ndmresp = ndm_core_request(g_ndmcore,
 				NDM_CORE_REQUEST_PARSE, NDM_CORE_MODE_CACHE, NULL,
@@ -446,194 +465,191 @@ void get_netinfo(netinfo_t *netinfo)
 			ndm_core_response_free(&g_ndmresp);
 
 			exit(EXIT_SYSCALL);
-		} else
+		}
+
+		root = ndm_core_response_root(g_ndmresp);
+
+		if (root == NULL) {
+			lprintf(LOG_ERR, "(%s:%d) null ndm response", __FILE__, __LINE__);
+			ndm_core_response_free(&g_ndmresp);
+
+			exit(EXIT_SYSCALL);
+		}
+
+		if( ndm_xml_node_type(root) != NDM_XML_NODE_TYPE_ELEMENT )
+			continue;
+
+		if( !strcmp(ndm_xml_node_name(root), "response") )
 		{
-			const struct ndm_xml_node_t* root = ndm_core_response_root(g_ndmresp);
+			const struct ndm_xml_node_t* node = ndm_xml_node_first_child(root, NULL);
 
-			if (root == NULL) {
-				lprintf(LOG_ERR, "(%s:%d) null ndm response", __FILE__, __LINE__);
-				ndm_core_response_free(&g_ndmresp);
+			while (node != NULL) {
+				const char *cn = ndm_xml_node_name(node);
+				const char *cv = ndm_xml_node_value(node);
 
-				exit(EXIT_SYSCALL);
-			} else {
-				if( ndm_xml_node_type(root) == NDM_XML_NODE_TYPE_ELEMENT )
+				if( !strcmp(cn, "rxpackets") )
 				{
-					if( !strcmp(ndm_xml_node_name(root), "response") )
+					const long long rxp = atoll(cv);
+
+					if( rxp >= 0 )
 					{
-						const struct ndm_xml_node_t* node =
-							ndm_xml_node_first_child(root, NULL);
-
-						while (node != NULL) {
-
-							if( !strcmp(ndm_xml_node_name(node), "rxpackets") )
-							{
-								long long rxp = atoll(ndm_xml_node_value(node));
-
-								if( rxp >= 0 )
-								{
-									netinfo->rx_packets[i] = rxp;
-								}
-							}
-
-							if( !strcmp(ndm_xml_node_name(node), "rx-multicast-packets") )
-							{
-								long long rxmcp = atoll(ndm_xml_node_value(node));
-
-								if( rxmcp >= 0 )
-								{
-									netinfo->rx_mc_packets[i] = rxmcp;
-								}
-							}
-
-							if( !strcmp(ndm_xml_node_name(node), "rx-broadcast-packets") )
-							{
-								long long rxbcp = atoll(ndm_xml_node_value(node));
-
-								if( rxbcp >= 0 )
-								{
-									netinfo->rx_bc_packets[i] = rxbcp;
-								}
-							}
-
-
-							if( !strcmp(ndm_xml_node_name(node), "rxbytes") )
-							{
-								long long rxb = atoll(ndm_xml_node_value(node));
-
-								if( rxb >= 0 )
-								{
-									netinfo->rx_bytes[i] = rxb;
-								}
-							}
-
-							if( !strcmp(ndm_xml_node_name(node), "rxerrors") )
-							{
-								long long rxe = atoll(ndm_xml_node_value(node));
-
-								if( rxe >= 0 )
-								{
-									netinfo->rx_errors[i] = rxe;
-								}
-							}
-
-							if( !strcmp(ndm_xml_node_name(node), "rxdropped") )
-							{
-								long long rxd = atoll(ndm_xml_node_value(node));
-
-								if( rxd >= 0 )
-								{
-									netinfo->rx_drops[i] = rxd;
-								}
-							}
-
-							if( !strcmp(ndm_xml_node_name(node), "txpackets") )
-							{
-								long long txp = atoll(ndm_xml_node_value(node));
-
-								if( txp >= 0 )
-								{
-									netinfo->tx_packets[i] = txp;
-								}
-							}
-
-							if( !strcmp(ndm_xml_node_name(node), "tx-multicast-packets") )
-							{
-								long long txmcp = atoll(ndm_xml_node_value(node));
-
-								if( txmcp >= 0 )
-								{
-									netinfo->tx_mc_packets[i] = txmcp;
-								}
-							}
-
-							if( !strcmp(ndm_xml_node_name(node), "tx-broadcast-packets") )
-							{
-								long long txbcp = atoll(ndm_xml_node_value(node));
-
-								if( txbcp >= 0 )
-								{
-									netinfo->tx_bc_packets[i] = txbcp;
-								}
-							}
-
-							if( !strcmp(ndm_xml_node_name(node), "txbytes") )
-							{
-								long long txb = atoll(ndm_xml_node_value(node));
-
-								if( txb >= 0 )
-								{
-									netinfo->tx_bytes[i] = txb;
-								}
-							}
-
-							if( !strcmp(ndm_xml_node_name(node), "txerrors") )
-							{
-								long long txe = atoll(ndm_xml_node_value(node));
-
-								if( txe >= 0 )
-								{
-									netinfo->tx_errors[i] = txe;
-								}
-							}
-
-							if( !strcmp(ndm_xml_node_name(node), "txdropped") )
-							{
-								long long txd = atoll(ndm_xml_node_value(node));
-
-								if( txd >= 0 )
-								{
-									netinfo->tx_drops[i] = txd;
-								}
-							}
-
-							node = ndm_xml_node_next_sibling(node, NULL);
-						}
+						netinfo->rx_packets[i] = rxp;
 					}
+
+					node = ndm_xml_node_next_sibling(node, NULL);
+					continue;
 				}
+
+				if( !strcmp(cn, "rx-multicast-packets") )
+				{
+					const long long rxmcp = atoll(cv);
+
+					if( rxmcp >= 0 )
+					{
+						netinfo->rx_mc_packets[i] = rxmcp;
+					}
+
+					node = ndm_xml_node_next_sibling(node, NULL);
+					continue;
+				}
+
+				if( !strcmp(cn, "rx-broadcast-packets") )
+				{
+					long long rxbcp = atoll(cv);
+
+					if( rxbcp >= 0 )
+					{
+						netinfo->rx_bc_packets[i] = rxbcp;
+					}
+
+					node = ndm_xml_node_next_sibling(node, NULL);
+					continue;
+				}
+
+				if( !strcmp(cn, "rxbytes") )
+				{
+					long long rxb = atoll(cv);
+
+					if( rxb >= 0 )
+					{
+						netinfo->rx_bytes[i] = rxb;
+					}
+
+					node = ndm_xml_node_next_sibling(node, NULL);
+					continue;
+				}
+
+				if( !strcmp(cn, "rxerrors") )
+				{
+					long long rxe = atoll(cv);
+
+					if( rxe >= 0 )
+					{
+						netinfo->rx_errors[i] = rxe;
+					}
+
+					node = ndm_xml_node_next_sibling(node, NULL);
+					continue;
+				}
+
+				if( !strcmp(cn, "rxdropped") )
+				{
+					long long rxd = atoll(cv);
+
+					if( rxd >= 0 )
+					{
+						netinfo->rx_drops[i] = rxd;
+					}
+
+					node = ndm_xml_node_next_sibling(node, NULL);
+					continue;
+				}
+
+				if( !strcmp(cn, "txpackets") )
+				{
+					long long txp = atoll(cv);
+
+					if( txp >= 0 )
+					{
+						netinfo->tx_packets[i] = txp;
+					}
+
+					node = ndm_xml_node_next_sibling(node, NULL);
+					continue;
+				}
+
+				if( !strcmp(cn, "tx-multicast-packets") )
+				{
+					long long txmcp = atoll(cv);
+
+					if( txmcp >= 0 )
+					{
+						netinfo->tx_mc_packets[i] = txmcp;
+					}
+
+					node = ndm_xml_node_next_sibling(node, NULL);
+					continue;
+				}
+
+				if( !strcmp(cn, "tx-broadcast-packets") )
+				{
+					long long txbcp = atoll(cv);
+
+					if( txbcp >= 0 )
+					{
+						netinfo->tx_bc_packets[i] = txbcp;
+					}
+
+					node = ndm_xml_node_next_sibling(node, NULL);
+					continue;
+				}
+
+				if( !strcmp(cn, "txbytes") )
+				{
+					long long txb = atoll(cv);
+
+					if( txb >= 0 )
+					{
+						netinfo->tx_bytes[i] = txb;
+					}
+
+					node = ndm_xml_node_next_sibling(node, NULL);
+					continue;
+				}
+
+				if( !strcmp(cn, "txerrors") )
+				{
+					long long txe = atoll(cv);
+
+					if( txe >= 0 )
+					{
+						netinfo->tx_errors[i] = txe;
+					}
+
+					node = ndm_xml_node_next_sibling(node, NULL);
+					continue;
+				}
+
+				if( !strcmp(cn, "txdropped") )
+				{
+					long long txd = atoll(cv);
+
+					if( txd >= 0 )
+					{
+						netinfo->tx_drops[i] = txd;
+					}
+
+					node = ndm_xml_node_next_sibling(node, NULL);
+					continue;
+				}
+
+				node = ndm_xml_node_next_sibling(node, NULL);
 			}
 		}
+
 		ndm_core_response_free(&g_ndmresp);
 	}
 }
-#else
-void get_netinfo(netinfo_t *netinfo)
-{
-	int fd = socket(AF_INET, SOCK_DGRAM, 0);
-	size_t i;
-	struct ifreq ifreq;
-	field_t fields[MAX_NR_INTERFACES + 1];
-
-	memset(fields, 0, (MAX_NR_INTERFACES + 1) * sizeof(field_t));
-	for (i = 0; i < g_interface_list_length; i++) {
-		fields[i].prefix    = g_interface_list[i];
-		fields[i].len       = 12;
-		fields[i].value[0]  = &netinfo->rx_bytes[i];
-		fields[i].value[1]  = &netinfo->rx_packets[i];
-		fields[i].value[2]  = &netinfo->rx_errors[i];
-		fields[i].value[3]  = &netinfo->rx_drops[i];
-		fields[i].value[8]  = &netinfo->tx_bytes[i];
-		fields[i].value[9]  = &netinfo->tx_packets[i];
-		fields[i].value[10] = &netinfo->tx_errors[i];
-		fields[i].value[11] = &netinfo->tx_drops[i];
-
-		snprintf(ifreq.ifr_name, sizeof(ifreq.ifr_name), "%s", g_interface_list[i]);
-		if (fd == -1 || ioctl(fd, SIOCGIFFLAGS, &ifreq) == -1) {
-			netinfo->status[i] = 4;
-			continue;
-		}
-
-		if (ifreq.ifr_flags & IFF_UP)
-			netinfo->status[i] = (ifreq.ifr_flags & IFF_RUNNING) ? 1 : 7;
-		else
-			netinfo->status[i] = 2;
-	}
-	if (fd != -1)
-		close(fd);
-
-	if (parse_file("/proc/net/dev", fields, 255, 0))
-		memset(netinfo, 0, sizeof(*netinfo));
-}
-#endif
 
 #endif /* __linux__ */
 

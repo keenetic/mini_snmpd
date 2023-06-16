@@ -41,20 +41,12 @@ char     *g_serial         = NULL;
 char     *g_mfg            = NULL;
 char     *g_model          = NULL;
 char     *g_cid            = NULL;
+char     *g_ifmap          = NULL;
 
 char     *g_disk_list[MAX_NR_DISKS];
 size_t    g_disk_list_length;
 
-char     *g_interface_list[MAX_NR_INTERFACES];
-#ifdef NDM
-char     *g_interface_name_list[MAX_NR_INTERFACES];
-char     *g_interface_descr_list[MAX_NR_INTERFACES];
-size_t    g_interface_type[MAX_NR_INTERFACES];
-size_t    g_interface_mtu[MAX_NR_INTERFACES];
-char     *g_interface_mac[MAX_NR_INTERFACES];
-int       g_interface_ip_address[MAX_NR_INTERFACES];
-int       g_interface_ip_mask[MAX_NR_INTERFACES];
-#endif
+ifaces_t  g_ifaces_list[MAX_NR_INTERFACES];
 size_t    g_interface_list_length = 0;
 
 in_port_t g_udp_port = 161;

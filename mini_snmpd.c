@@ -501,7 +501,7 @@ static void handle_tcp_client_read(client_t *client)
 
 int main(int argc, char *argv[])
 {
-	static const char short_options[] = "p:P:c:D:V:L:C:d:i:t:T:S:G:M:U:ansvh"
+	static const char short_options[] = "p:P:c:D:V:L:C:d:i:t:T:S:G:M:U:Q:ansvh"
 #ifndef __FreeBSD__
 		"I:"
 #endif
@@ -622,6 +622,11 @@ int main(int argc, char *argv[])
 			case 'U':
 				g_cid = strdup(optarg);
 				break;
+
+			case 'Q':
+				g_ifmap = strdup(optarg);
+				break;
+
 #ifndef __FreeBSD__
 			case 'I':
 				g_bind_to_device = strdup(optarg);

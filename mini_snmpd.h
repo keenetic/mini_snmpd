@@ -310,6 +310,17 @@ typedef struct demoinfo_s {
 } demoinfo_t;
 #endif
 
+typedef struct ifaces_s {
+	char *iface;
+	char *name;
+	char *descr;
+	size_t type;
+	size_t mtu;
+	char *mac;
+	uint32_t ip_address;
+	uint32_t ip_mask;
+	unsigned int index;
+} ifaces_t;
 
 /*
  * Global variables
@@ -337,20 +348,12 @@ extern char     *g_serial;
 extern char     *g_mfg;
 extern char     *g_model;
 extern char     *g_cid;
+extern char     *g_ifmap;
 
 extern char     *g_disk_list[MAX_NR_DISKS];
 extern size_t    g_disk_list_length;
 
-extern char     *g_interface_list[MAX_NR_INTERFACES];
-#ifdef NDM
-extern char     *g_interface_name_list[MAX_NR_INTERFACES];
-extern char     *g_interface_descr_list[MAX_NR_INTERFACES];
-extern size_t    g_interface_type[MAX_NR_INTERFACES];
-extern size_t    g_interface_mtu[MAX_NR_INTERFACES];
-extern char     *g_interface_mac[MAX_NR_INTERFACES];
-extern int       g_interface_ip_address[MAX_NR_INTERFACES];
-extern int       g_interface_ip_mask[MAX_NR_INTERFACES];
-#endif
+extern ifaces_t  g_ifaces_list[MAX_NR_INTERFACES];
 extern size_t    g_interface_list_length;
 
 extern in_port_t g_udp_port;
