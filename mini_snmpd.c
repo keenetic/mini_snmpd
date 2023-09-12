@@ -736,6 +736,8 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	memset(&sockaddr, 0, sizeof(sockaddr));
+
 	sockaddr.sa.sin_family = AF_INET;
 	sockaddr.sa.sin_port = htons(g_udp_port);
 	sockaddr.sa.sin_addr = inaddr_any;
@@ -844,6 +846,8 @@ int main(int argc, char *argv[])
 		lprintf(LOG_WARNING, "could not set SO_REUSEADDR on TCP socket: %m\n");
 		exit(EXIT_SYSCALL);
 	}
+
+	memset(&sockaddr, 0, sizeof(sockaddr));
 
 	sockaddr.sa.sin_family = AF_INET;
 	sockaddr.sa.sin_port = htons(g_udp_port);
@@ -1049,6 +1053,22 @@ int main(int argc, char *argv[])
 				}
 			}
 		}
+	}
+
+	for (i = 0; i < g_mib_length; ++i) {
+		if (g_mib[i].data.buffer != NULL)
+			free(g_mib[i].data.buffer);
+	}
+
+	for (i = 0; i < g_interface_list_length; ++i) {
+		if (g_ifaces_list[i].iface != NULL)
+			free(g_ifaces_list[i].iface);
+		if (g_ifaces_list[i].name != NULL)
+			free(g_ifaces_list[i].name);
+		if (g_ifaces_list[i].descr != NULL)
+			free(g_ifaces_list[i].descr);
+		if (g_ifaces_list[i].mac != NULL)
+			free(g_ifaces_list[i].mac);
 	}
 
 	/* We were killed, print a message and exit */

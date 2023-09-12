@@ -504,7 +504,7 @@ static int data_alloc(data_t *data, int type)
 			break;
 
 		case BER_TYPE_OCTET_STRING:
-			data->max_length = 4;
+			data->max_length = 16;
 			data->encoded_length = 0;
 			data->buffer = allocate(data->max_length);
 			break;
@@ -724,6 +724,7 @@ static int mib_build_system(void)
 	}
 
 	if (!ndm_core_response_is_ok(g_ndmresp)) {
+		ndm_core_response_free(&g_ndmresp);
 		lprintf(LOG_ERR, "(%s:%d) ndm response is invalid", __FILE__, __LINE__);
 
 		return -1;
@@ -732,6 +733,7 @@ static int mib_build_system(void)
 	const struct ndm_xml_node_t* root = ndm_core_response_root(g_ndmresp);
 
 	if (root == NULL) {
+		ndm_core_response_free(&g_ndmresp);
 		lprintf(LOG_ERR, "(%s:%d) null ndm response", __FILE__, __LINE__);
 
 		return -1;
@@ -1070,6 +1072,7 @@ static int mib_build_ifmib(void)
 			unsigned int ifidx = atol(idx);
 
 			if (ifidx < 1) {
+				free(copy);
 				lprintf(LOG_ERR, "invalid index");
 
 				return -1;
