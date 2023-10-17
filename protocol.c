@@ -776,6 +776,31 @@ static int encode_snmp_response(request_t *request, response_t *response, client
 	return 0;
 }
 
+static int check_view_access(request_t *request, oid_t *oid)
+{
+	if (request->view == NULL)
+		return 1;
+
+	int included = 0;
+
+	for (size_t i = 0; i < request->view->include_oid_list_length; ++i) {
+		if (oid_is_prefix(&request->view->include_oid_list[i], oid)) {
+			included++;
+			break;
+		}
+	}
+
+	if (!included)
+		return 0;
+
+	for (size_t i = 0; i < request->view->exclude_oid_list_length; ++i) {
+		if (oid_is_prefix(&request->view->exclude_oid_list[i], oid))
+			return 0;
+	}
+
+	return 1;
+}
+
 static int handle_snmp_get(request_t *request, response_t *response, client_t *UNUSED(client))
 {
 	size_t i, pos;
@@ -788,6 +813,9 @@ static int handle_snmp_get(request_t *request, response_t *response, client_t *U
 	 */
 	for (i = 0; i < request->oid_list_length; i++) {
 		value_t *value;
+
+		if (!check_view_access(request, &request->oid_list[i]))
+			SNMP_GET_ERROR(response, request, i, SNMP_STATUS_NO_SUCH_NAME, m_no_such_object, msg);
 
 		pos = 0;
 		value = mib_find(&request->oid_list[i], &pos);
@@ -828,6 +856,10 @@ static int handle_snmp_getnext(request_t *request, response_t *response, client_
 	 */
 	for (i = 0; i < request->oid_list_length; i++) {
 		value_t *value = mib_findnext(&request->oid_list[i]);
+
+		while (value != NULL && !check_view_access(request, &value->oid))
+			value = mib_findnext(&value->oid);
+
 		if (!value)
 			SNMP_GET_ERROR(response, request, i, SNMP_STATUS_NO_SUCH_NAME, m_end_of_mib_view, msg);
 
@@ -866,6 +898,10 @@ static int handle_snmp_getbulk(request_t *request, response_t *response, client_
 			break;
 
 		value = mib_findnext(&oid_list[i]);
+
+		while (value != NULL && !check_view_access(request, &value->oid))
+			value = mib_findnext(&value->oid);
+
 		if (!value)
 			SNMP_GET_ERROR(response, request, i, SNMP_STATUS_NO_SUCH_NAME, m_end_of_mib_view, msg);
 
@@ -894,6 +930,10 @@ static int handle_snmp_getbulk(request_t *request, response_t *response, client_
 
 		for (i = request->non_repeaters; i < request->oid_list_length; i++) {
 			value = mib_findnext(&oid_list[i]);
+
+			while (value != NULL && !check_view_access(request, &value->oid))
+				value = mib_findnext(&value->oid);
+
 			if (!value)
 				SNMP_GET_ERROR(response, request, i, SNMP_STATUS_NO_SUCH_NAME, m_end_of_mib_view, msg);
 
@@ -944,6 +984,19 @@ int snmp_packet_complete(const client_t *client)
 	return ((client->size - pos) == len) ? 1 : 0;
 }
 
+int snmp_check_view(request_t *request)
+{
+	for (size_t i = 0; i < g_view_length; ++i) {
+		if (strcmp(g_view[i].community, request->community))
+			continue;
+
+		request->view = &g_view[i];
+
+		return 1;
+	}
+	return 0;
+}
+
 int snmp(client_t *client)
 {
 	response_t response;
@@ -963,9 +1016,11 @@ int snmp(client_t *client)
 	 */
 	if (request.version == SNMP_VERSION_2C) {
 		if (strcmp(g_community, request.community)) {
-			response.error_status = (request.version == SNMP_VERSION_2C) ? SNMP_STATUS_NO_ACCESS : SNMP_STATUS_GEN_ERR;
-			response.error_index = 0;
-			goto done;
+			if (!snmp_check_view(&request)) {
+				response.error_status = (request.version == SNMP_VERSION_2C) ? SNMP_STATUS_NO_ACCESS : SNMP_STATUS_GEN_ERR;
+				response.error_index = 0;
+				goto done;
+			}
 		}
 	} else if (g_auth) {
 		response.error_status = SNMP_STATUS_GEN_ERR;

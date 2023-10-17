@@ -269,6 +269,19 @@ oid_t *oid_aton(const char *str)
 	return &oid;
 }
 
+int oid_is_prefix(const oid_t *oid1, const oid_t* oid2)
+{
+	if (oid2->subid_list_length < oid1->subid_list_length)
+		return 0;
+
+	for (size_t i = 0; i < oid1->subid_list_length; ++i) {
+		if (oid1->subid_list[i] != oid2->subid_list[i])
+			return 0;
+	}
+
+	return 1;
+}
+
 int oid_cmp(const oid_t *oid1, const oid_t *oid2)
 {
 	size_t i;

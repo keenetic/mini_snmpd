@@ -49,6 +49,7 @@
 #define EXIT_ARGS                                       1
 #define EXIT_SYSCALL                                    2
 
+#define MAX_NR_VIEWS                                    4
 #define MAX_NR_CLIENTS                                  16
 #define MAX_NR_OIDS                                     70
 #define MAX_NR_SUBIDS                                   25
@@ -204,6 +205,14 @@ typedef struct field_s {
 	long long    *value[24];
 } field_t;
 
+typedef struct view_s {
+	char      community[MAX_STRING_SIZE];
+	oid_t     include_oid_list[MAX_NR_OIDS];
+	size_t    include_oid_list_length;
+	oid_t     exclude_oid_list[MAX_NR_OIDS];
+	size_t    exclude_oid_list_length;
+} view_t;
+
 typedef struct request_s {
 	char      community[MAX_STRING_SIZE];
 	int       type;
@@ -213,6 +222,7 @@ typedef struct request_s {
 	uint32_t  max_repetitions;
 	oid_t     oid_list[MAX_NR_OIDS];
 	size_t    oid_list_length;
+	view_t   *view;
 } request_t;
 
 typedef struct response_s {
@@ -371,6 +381,8 @@ extern int       g_tcp_sockfd6;
 extern value_t   g_mib[MAX_NR_VALUES];
 extern size_t    g_mib_length;
 
+extern view_t    g_view[MAX_NR_VIEWS];
+extern size_t    g_view_length;
 
 /*
  * Functions
@@ -383,6 +395,7 @@ void         dump_response (const response_t *response);
 char        *oid_ntoa (const oid_t *oid);
 oid_t       *oid_aton (const char  *str);
 int          oid_cmp  (const oid_t *oid1, const oid_t *oid2);
+int          oid_is_prefix  (const oid_t *oid1, const oid_t *oid2);
 
 int          split(const char *str, char *delim, char **list, int max_list_length);
 

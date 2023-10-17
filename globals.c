@@ -64,6 +64,9 @@ size_t    g_tcp_client_list_length = 0;
 value_t   g_mib[MAX_NR_VALUES];
 size_t    g_mib_length = 0;
 
+view_t    g_view[MAX_NR_VIEWS];
+size_t    g_view_length;
+
 #ifdef NDM
 struct ndm_core_t *g_ndmcore = NULL;
 struct ndm_core_response_t *g_ndmresp = NULL;

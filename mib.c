@@ -710,6 +710,105 @@ static int mib_build_entries_sorted_idx(const oid_t *prefix,
 	return 0;
 }
 
+static int mib_build_view(void)
+{
+	if ((g_ndmresp = ndm_core_request(g_ndmcore,
+			NDM_CORE_REQUEST_PARSE, NDM_CORE_MODE_CACHE, NULL,
+			"show snmp view")) == NULL) {
+		lprintf(LOG_ERR, "(%s:%d) ndm request failed: %s", __FILE__, __LINE__, strerror(errno));
+
+		return -1;
+	}
+
+	if (!ndm_core_response_is_ok(g_ndmresp)) {
+		ndm_core_response_free(&g_ndmresp);
+		lprintf(LOG_ERR, "(%s:%d) ndm response is invalid", __FILE__, __LINE__);
+
+		return -1;
+	}
+
+	const struct ndm_xml_node_t* root = ndm_core_response_root(g_ndmresp);
+
+	if (root == NULL) {
+		ndm_core_response_free(&g_ndmresp);
+		lprintf(LOG_ERR, "(%s:%d) null ndm response", __FILE__, __LINE__);
+
+		return -1;
+	}
+
+	if (ndm_xml_node_type(root) == NDM_XML_NODE_TYPE_ELEMENT) {
+		if (!strcmp(ndm_xml_node_name(root), "response")) {
+			const struct ndm_xml_node_t* node = ndm_xml_node_first_child(root, NULL);
+
+			while (node != NULL) {
+				if (strcmp(ndm_xml_node_name(node), "view")) {
+					node = ndm_xml_node_next_sibling(node, NULL);
+					continue;
+				}
+
+				const struct ndm_xml_node_t* cnode = ndm_xml_node_first_child(node, NULL);
+				bool filled = false;
+				view_t* v = &g_view[g_view_length];
+
+				while (cnode != NULL) {
+					const char *cn = ndm_xml_node_name(cnode);
+					const char *cv = ndm_xml_node_value(cnode);
+
+					if (!strcmp(cn, "id")) {
+						filled = true;
+						strcpy(v->community, cv);
+						cnode = ndm_xml_node_next_sibling(cnode, NULL);
+						continue;
+					}
+
+					if (!strcmp(cn, "include")) {
+						oid_t* oid = oid_aton(cv);
+
+						if (oid == NULL) {
+							ndm_core_response_free(&g_ndmresp);
+							lprintf(LOG_ERR, "(%s:%d) invalid OID", __FILE__, __LINE__);
+
+							return -1;
+						}
+
+						memcpy(&v->include_oid_list[v->include_oid_list_length], oid, sizeof(*oid));
+						++v->include_oid_list_length;
+						cnode = ndm_xml_node_next_sibling(cnode, NULL);
+						continue;
+					}
+
+					if (!strcmp(cn, "exclude")) {
+						oid_t* oid = oid_aton(cv);
+
+						if (oid == NULL) {
+							ndm_core_response_free(&g_ndmresp);
+							lprintf(LOG_ERR, "(%s:%d) invalid OID", __FILE__, __LINE__);
+
+							return -1;
+						}
+
+						memcpy(&v->exclude_oid_list[v->exclude_oid_list_length], oid, sizeof(*oid));
+						++v->exclude_oid_list_length;
+						cnode = ndm_xml_node_next_sibling(cnode, NULL);
+						continue;
+					}
+
+					cnode = ndm_xml_node_next_sibling(cnode, NULL);
+				}
+
+				if (filled)
+					++g_view_length;
+
+				node = ndm_xml_node_next_sibling(node, NULL);
+			}
+		}
+	}
+
+	ndm_core_response_free(&g_ndmresp);
+
+	return 0;
+}
+
 static int mib_build_system(void)
 {
 	char hostname[MAX_STRING_SIZE];
@@ -1585,6 +1684,9 @@ static int mib_build_load(void)
 
 int mib_build(void)
 {
+	if (mib_build_view())
+		return -1;
+
 	if (mib_build_system())
 		return -1;
 
