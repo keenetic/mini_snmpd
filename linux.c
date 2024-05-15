@@ -312,8 +312,7 @@ void get_netinfo(netinfo_t *netinfo)
 			const struct ndm_xml_node_t* node =
 				ndm_xml_node_first_child(root, NULL);
 			int admin_status = 2; // down
-			int ilink = 0;
-			int connected = 0;
+			int oper_status = 2; // down
 			int imtu = NDM_MIN_MTU_;
 			int is_port = 0;
 
@@ -345,32 +344,41 @@ void get_netinfo(netinfo_t *netinfo)
 				if( !strcmp(cn, "type") && !strcmp(cv, "Port") )
 				{
 					imtu = NDM_ETH_MTU_;
-					admin_status = 1; // up
-					connected = 1; // connected
 					is_port = 1;
 					node = ndm_xml_node_next_sibling(node, NULL);
 					continue;
 				}
 
-				if( !strcmp(cn, "state") && !strcmp(cv, "up") )
+				if( !strcmp(cn, "summary") )
 				{
-					admin_status = 1; // up
-					node = ndm_xml_node_next_sibling(node, NULL);
-					continue;
-				}
+					const struct ndm_xml_node_t* layer =
+						ndm_xml_node_first_child(node, NULL);
 
-				if( !strcmp(cn, "link") && !strcmp(cv, "up") )
-				{
-					ilink = 1;
-					node = ndm_xml_node_next_sibling(node, NULL);
-					continue;
-				}
+					while (layer != NULL) {
+						if( !strcmp(ndm_xml_node_name(layer), "layer") ) {
+							const struct ndm_xml_node_t* status =
+								ndm_xml_node_first_child(layer, NULL);
 
-				if( !strcmp(cn, "connected") && !strcmp(cv, "yes") )
-				{
-					connected = 1;
-					node = ndm_xml_node_next_sibling(node, NULL);
-					continue;
+							while( status != NULL ) {
+								const char *cln = ndm_xml_node_name(status);
+								const char *clv = ndm_xml_node_value(status);
+
+								if( !strcmp(cln, "conf") )
+								{
+									admin_status = (!strcmp(clv, "running") ? 1 : 2);
+
+								} else
+								if( !strcmp(cln, "link") )
+								{
+									oper_status = (!strcmp(clv, "running") ? 1 : 2);
+								}
+
+								status = ndm_xml_node_next_sibling(status, NULL);
+							}
+						}
+
+						layer = ndm_xml_node_next_sibling(layer, NULL);
+					}
 				}
 
 				if( !strcmp(cn, "speed") )
@@ -433,14 +441,9 @@ void get_netinfo(netinfo_t *netinfo)
 			}
 
 			netinfo->mtu[i] = imtu;
-			netinfo->admin_status[i] = admin_status;
 			netinfo->is_port[i] = is_port;
-
-			if( ilink == 1 && connected == 1 ) {
-				netinfo->status[i] = 1; // up
-			} else {
-				netinfo->status[i] = 2; // down
-			}
+			netinfo->admin_status[i] = admin_status;
+			netinfo->status[i] = oper_status;
 		}
 
 		ndm_core_response_free(&g_ndmresp);
