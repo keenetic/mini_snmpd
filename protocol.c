@@ -1014,16 +1014,8 @@ int snmp(client_t *client)
 	 * If we are using SNMP v2c or require authentication, check the community
 	 * string for length and validity.
 	 */
-	if (request.version == SNMP_VERSION_2C) {
-		if (strcmp(g_community, request.community)) {
-			if (!snmp_check_view(&request)) {
-				response.error_status = (request.version == SNMP_VERSION_2C) ? SNMP_STATUS_NO_ACCESS : SNMP_STATUS_GEN_ERR;
-				response.error_index = 0;
-				goto done;
-			}
-		}
-	} else if (g_auth) {
-		response.error_status = SNMP_STATUS_GEN_ERR;
+	if (strcmp(g_community, request.community) && !snmp_check_view(&request)) {
+		response.error_status = (request.version == SNMP_VERSION_2C) ? SNMP_STATUS_NO_ACCESS : SNMP_STATUS_GEN_ERR;
 		response.error_index = 0;
 		goto done;
 	}
