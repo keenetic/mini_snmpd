@@ -52,10 +52,13 @@ static const oid_t m_udp_oid            = { { 1, 3, 6, 1, 2, 1, 7               
 static const oid_t m_host_oid           = { { 1, 3, 6, 1, 2, 1, 25, 1           },  8, 9  };
 static const oid_t m_if_ext_oid         = { { 1, 3, 6, 1, 2, 1, 31, 1, 1, 1     }, 10, 11 };
 static const oid_t m_entity_oid         = { { 1, 3, 6, 1, 2, 1, 47, 1, 1, 1     }, 10, 11 }; 
+static const oid_t m_wan_3g_oid         = { { 1, 3, 6, 1, 4, 1, 9, 9, 661, 1, 3, 4, 1, 1 }, 14, 15 };
+static const oid_t m_wan_cell_oid       = { { 1, 3, 6, 1, 4, 1, 9, 9, 817, 1, 1, 1, 1, 1 }, 14, 15 };
 static const oid_t m_memory_oid         = { { 1, 3, 6, 1, 4, 1, 2021, 4,        },  8, 10 };
 static const oid_t m_disk_oid           = { { 1, 3, 6, 1, 4, 1, 2021, 9, 1      },  9, 11 };
 static const oid_t m_load_oid           = { { 1, 3, 6, 1, 4, 1, 2021, 10, 1     },  9, 11 };
 static const oid_t m_cpu_oid            = { { 1, 3, 6, 1, 4, 1, 2021, 11        },  8, 10 };
+
 #ifdef CONFIG_ENABLE_DEMO
 static const oid_t m_demo_oid           = { { 1, 3, 6, 1, 4, 1, 99999           },  7, 10 };
 #endif
@@ -937,7 +940,10 @@ static int mib_build_ifmib_ndmreq()
 		int has_ip = 0;
 		int has_mask = 0;
 		size_t j = g_interface_list_length - 1;
+
 		g_ifaces_list[j].mtu = NDM_MIN_MTU_;
+		g_ifaces_list[j].is_cellular = 0;
+
 		const struct ndm_xml_attr_t* nameattr =  ndm_xml_node_first_attr(node, "name");
 
 		if (nameattr != NULL &&
@@ -964,6 +970,12 @@ static int mib_build_ifmib_ndmreq()
 			}
 
 			if (!strcmp(cn, "type")) {
+				if (!strcmp(cv, "Yota") ||
+					!strcmp(cv, "UsbLte") ||
+					!strcmp(cv, "UsbQmi")) {
+					g_ifaces_list[j].is_cellular = 1;
+				}
+
 				if (!strcmp(cv, "FastEthernet") ||
 					!strcmp(cv, "GigabitEthernet") ||
 					!strcmp(cv, "AccessPoint") ||
@@ -972,7 +984,7 @@ static int mib_build_ifmib_ndmreq()
 					!strcmp(cv, "AsixEthernet") ||
 					!strcmp(cv, "Davicom") ||
 					!strcmp(cv, "UsbLte") ||
-					!strcmp(cv, "YotaOne") ||
+					!strcmp(cv, "Yota") ||
 					!strcmp(cv, "CdcEthernet") ||
 					!strcmp(cv, "SSTPEthernet") ||
 					!strcmp(cv, "RealtekEthernet") ||
@@ -1406,6 +1418,54 @@ static int mib_build_ip(void)
 	return 0;
 }
 
+static int mib_build_cell(void)
+{
+	size_t i;
+
+	/*
+	 * The CISCO-WAN-CELL-EXT-MIB and CISCO-WAN-3G-MIB.
+	 */
+
+	/* RSSI values */
+	for (i = 0; i < g_interface_list_length; i++) {
+		if (!g_ifaces_list[i].is_cellular)
+			continue;
+
+		if (mib_build_entry(&m_wan_3g_oid, 1, SLI(i), BER_TYPE_INTEGER, (const void *)(intptr_t)-254) == -1) {
+			return -1;
+		}
+	}
+
+	/* RSRP values */
+	for (i = 0; i < g_interface_list_length; i++) {
+		if (!g_ifaces_list[i].is_cellular)
+			continue;
+
+		if (mib_build_entry(&m_wan_cell_oid, 1, SLI(i), BER_TYPE_INTEGER, (const void *)(intptr_t)-254) == -1)
+			return -1;
+	}
+
+	/* RSRQ values */
+	for (i = 0; i < g_interface_list_length; i++) {
+		if (!g_ifaces_list[i].is_cellular)
+			continue;
+
+		if (mib_build_entry(&m_wan_cell_oid, 2, SLI(i), BER_TYPE_INTEGER, (const void *)(intptr_t)-254) == -1)
+			return -1;
+	}
+
+	/* SNR values */
+	for (i = 0; i < g_interface_list_length; i++) {
+		if (!g_ifaces_list[i].is_cellular)
+			continue;
+
+		if (mib_build_entry(&m_wan_cell_oid, 3, SLI(i), BER_TYPE_INTEGER, (const void *)(intptr_t)-254) == -1)
+			return -1;
+	}
+
+	return 0;
+}
+
 static int mib_build_tcp(void)
 {
 	/*
@@ -1702,6 +1762,9 @@ int mib_build(void)
 	if (mib_build_udp())
 		return -1;
 
+	if (mib_build_cell())
+		return -1;
+
 	/*
 	 * The host MIB: additional host info (HOST-RESOURCES-MIB.txt)
 	 * Caution: on changes, adapt the corresponding mib_update() section too!
@@ -1896,6 +1959,32 @@ int mib_update(int full)
 		    mib_update_entry(&m_udp_oid,  8, 0, &pos, BER_TYPE_COUNTER64, (const void *)(&u.udpinfo.udpInDatagrams))                        == -1 ||
 		    mib_update_entry(&m_udp_oid,  9, 0, &pos, BER_TYPE_COUNTER64, (const void *)(&u.udpinfo.udpOutDatagrams))                       == -1  )
 			return -1;
+	}
+
+	if (full && g_interface_list_length > 0) {
+			for (i = 0; i < g_interface_list_length; i++) {
+				if (!g_ifaces_list[i].is_cellular)
+					continue;
+
+				if (mib_update_entry(&m_wan_3g_oid, 1, SLI(i), &pos, BER_TYPE_INTEGER, (const void *)(intptr_t)(netinfo.rssi[i])) == -1)
+					return -1;
+			}
+
+			for (i = 0; i < g_interface_list_length; i++) {
+				if (!g_ifaces_list[i].is_cellular)
+					continue;
+
+				if (mib_update_entry(&m_wan_cell_oid, 1, SLI(i), &pos, BER_TYPE_INTEGER, (const void *)(intptr_t)(netinfo.rsrp[i])) == -1)
+					return -1;
+			}
+
+			for (i = 0; i < g_interface_list_length; i++) {
+				if (!g_ifaces_list[i].is_cellular)
+					continue;
+
+				if (mib_update_entry(&m_wan_cell_oid, 2, SLI(i), &pos, BER_TYPE_INTEGER, (const void *)(intptr_t)(netinfo.rsrq[i])) == -1)
+					return -1;
+			}
 	}
 
 	/*

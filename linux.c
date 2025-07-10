@@ -437,6 +437,51 @@ void get_netinfo(netinfo_t *netinfo)
 					continue;
 				}
 
+				if( !strcmp(cn, "rssi") )
+				{
+					if( strlen(cv) > 0 )
+					{
+						netinfo->rssi[i] = atol(cv);
+
+					} else
+					{
+						netinfo->rssi[i] = -254;
+					}
+
+					node = ndm_xml_node_next_sibling(node, NULL);
+					continue;
+				}
+
+				if( !strcmp(cn, "rsrp") )
+				{
+					if( strlen(cv) > 0 )
+					{
+						netinfo->rsrp[i] = atol(cv);
+
+					} else
+					{
+						netinfo->rsrp[i] = -254;
+					}
+
+					node = ndm_xml_node_next_sibling(node, NULL);
+					continue;
+				}
+
+				if( !strcmp(cn, "rsrq") )
+				{
+					if( strlen(cv) > 0 )
+					{
+						netinfo->rsrq[i] = atol(cv);
+
+					} else
+					{
+						netinfo->rsrq[i] = -254;
+					}
+
+					node = ndm_xml_node_next_sibling(node, NULL);
+					continue;
+				}
+
 				node = ndm_xml_node_next_sibling(node, NULL);
 			}
 

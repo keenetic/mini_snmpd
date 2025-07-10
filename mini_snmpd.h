@@ -281,6 +281,9 @@ typedef struct netinfo_s {
 	long long mtu[MAX_NR_INTERFACES];
 	long long is_port[MAX_NR_INTERFACES];
 	long long discont_time[MAX_NR_INTERFACES];
+	int rssi[MAX_NR_INTERFACES];
+	int rsrp[MAX_NR_INTERFACES];
+	int rsrq[MAX_NR_INTERFACES];
 } netinfo_t;
 
 typedef struct ipinfo_s {
@@ -330,6 +333,8 @@ typedef struct ifaces_s {
 	uint32_t ip_address;
 	uint32_t ip_mask;
 	unsigned int index;
+
+	int is_cellular;
 } ifaces_t;
 
 /*
