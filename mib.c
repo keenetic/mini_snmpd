@@ -1463,6 +1463,15 @@ static int mib_build_cell(void)
 			return -1;
 	}
 
+	/* SINR values */
+	for (i = 0; i < g_interface_list_length; i++) {
+		if (!g_ifaces_list[i].is_cellular)
+			continue;
+
+		if (mib_build_entry(&m_wan_cell_oid, 4, SLI(i), BER_TYPE_INTEGER, (const void *)(intptr_t)-254) == -1)
+			return -1;
+	}
+
 	return 0;
 }
 
@@ -1983,6 +1992,22 @@ int mib_update(int full)
 					continue;
 
 				if (mib_update_entry(&m_wan_cell_oid, 2, SLI(i), &pos, BER_TYPE_INTEGER, (const void *)(intptr_t)(netinfo.rsrq[i])) == -1)
+					return -1;
+			}
+
+			for (i = 0; i < g_interface_list_length; i++) {
+				if (!g_ifaces_list[i].is_cellular)
+					continue;
+
+				if (mib_update_entry(&m_wan_cell_oid, 3, SLI(i), &pos, BER_TYPE_INTEGER, (const void *)(intptr_t)(netinfo.sinr[i])) == -1)
+					return -1;
+			}
+
+			for (i = 0; i < g_interface_list_length; i++) {
+				if (!g_ifaces_list[i].is_cellular)
+					continue;
+
+				if (mib_update_entry(&m_wan_cell_oid, 4, SLI(i), &pos, BER_TYPE_INTEGER, (const void *)(intptr_t)(netinfo.sinr[i])) == -1)
 					return -1;
 			}
 	}

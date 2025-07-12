@@ -284,6 +284,7 @@ typedef struct netinfo_s {
 	int rssi[MAX_NR_INTERFACES];
 	int rsrp[MAX_NR_INTERFACES];
 	int rsrq[MAX_NR_INTERFACES];
+	int sinr[MAX_NR_INTERFACES];
 } netinfo_t;
 
 typedef struct ipinfo_s {

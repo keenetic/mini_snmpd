@@ -482,6 +482,21 @@ void get_netinfo(netinfo_t *netinfo)
 					continue;
 				}
 
+				if( !strcmp(cn, "sinr") )
+				{
+					if( strlen(cv) > 0 )
+					{
+						netinfo->sinr[i] = atol(cv);
+
+					} else
+					{
+						netinfo->sinr[i] = -254;
+					}
+
+					node = ndm_xml_node_next_sibling(node, NULL);
+					continue;
+				}
+
 				node = ndm_xml_node_next_sibling(node, NULL);
 			}
 
