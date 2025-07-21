@@ -1771,9 +1771,6 @@ int mib_build(void)
 	if (mib_build_udp())
 		return -1;
 
-	if (mib_build_cell())
-		return -1;
-
 	/*
 	 * The host MIB: additional host info (HOST-RESOURCES-MIB.txt)
 	 * Caution: on changes, adapt the corresponding mib_update() section too!
@@ -1790,6 +1787,9 @@ int mib_build(void)
 	    mib_build_entry(&m_entity_oid, 1, 19, BER_TYPE_OCTET_STRING, g_cid ?: "") == -1) {
 		return -1;
 	}
+
+	if (mib_build_cell())
+		return -1;
 
 	/*
 	 * The memory MIB: total/free memory (UCD-SNMP-MIB.txt)
@@ -1970,48 +1970,6 @@ int mib_update(int full)
 			return -1;
 	}
 
-	if (full && g_interface_list_length > 0) {
-			for (i = 0; i < g_interface_list_length; i++) {
-				if (!g_ifaces_list[i].is_cellular)
-					continue;
-
-				if (mib_update_entry(&m_wan_3g_oid, 1, SLI(i), &pos, BER_TYPE_INTEGER, (const void *)(intptr_t)(netinfo.rssi[i])) == -1)
-					return -1;
-			}
-
-			for (i = 0; i < g_interface_list_length; i++) {
-				if (!g_ifaces_list[i].is_cellular)
-					continue;
-
-				if (mib_update_entry(&m_wan_cell_oid, 1, SLI(i), &pos, BER_TYPE_INTEGER, (const void *)(intptr_t)(netinfo.rsrp[i])) == -1)
-					return -1;
-			}
-
-			for (i = 0; i < g_interface_list_length; i++) {
-				if (!g_ifaces_list[i].is_cellular)
-					continue;
-
-				if (mib_update_entry(&m_wan_cell_oid, 2, SLI(i), &pos, BER_TYPE_INTEGER, (const void *)(intptr_t)(netinfo.rsrq[i])) == -1)
-					return -1;
-			}
-
-			for (i = 0; i < g_interface_list_length; i++) {
-				if (!g_ifaces_list[i].is_cellular)
-					continue;
-
-				if (mib_update_entry(&m_wan_cell_oid, 3, SLI(i), &pos, BER_TYPE_INTEGER, (const void *)(intptr_t)(netinfo.sinr[i])) == -1)
-					return -1;
-			}
-
-			for (i = 0; i < g_interface_list_length; i++) {
-				if (!g_ifaces_list[i].is_cellular)
-					continue;
-
-				if (mib_update_entry(&m_wan_cell_oid, 4, SLI(i), &pos, BER_TYPE_INTEGER, (const void *)(intptr_t)(netinfo.sinr[i])) == -1)
-					return -1;
-			}
-	}
-
 	/*
 	 * The host MIB: additional host info (HOST-RESOURCES-MIB.txt)
 	 * Caution: on changes, adapt the corresponding mib_build() section too!
@@ -2148,6 +2106,49 @@ int mib_update(int full)
 			}
 		}
 	}
+
+	if (full && g_interface_list_length > 0) {
+			for (i = 0; i < g_interface_list_length; i++) {
+				if (!g_ifaces_list[i].is_cellular)
+					continue;
+
+				if (mib_update_entry(&m_wan_3g_oid, 1, SLI(i), &pos, BER_TYPE_INTEGER, (const void *)(intptr_t)(netinfo.rssi[i])) == -1)
+					return -1;
+			}
+
+			for (i = 0; i < g_interface_list_length; i++) {
+				if (!g_ifaces_list[i].is_cellular)
+					continue;
+
+				if (mib_update_entry(&m_wan_cell_oid, 1, SLI(i), &pos, BER_TYPE_INTEGER, (const void *)(intptr_t)(netinfo.rsrp[i])) == -1)
+					return -1;
+			}
+
+			for (i = 0; i < g_interface_list_length; i++) {
+				if (!g_ifaces_list[i].is_cellular)
+					continue;
+
+				if (mib_update_entry(&m_wan_cell_oid, 2, SLI(i), &pos, BER_TYPE_INTEGER, (const void *)(intptr_t)(netinfo.rsrq[i])) == -1)
+					return -1;
+			}
+
+			for (i = 0; i < g_interface_list_length; i++) {
+				if (!g_ifaces_list[i].is_cellular)
+					continue;
+
+				if (mib_update_entry(&m_wan_cell_oid, 3, SLI(i), &pos, BER_TYPE_INTEGER, (const void *)(intptr_t)(netinfo.sinr[i])) == -1)
+					return -1;
+			}
+
+			for (i = 0; i < g_interface_list_length; i++) {
+				if (!g_ifaces_list[i].is_cellular)
+					continue;
+
+				if (mib_update_entry(&m_wan_cell_oid, 4, SLI(i), &pos, BER_TYPE_INTEGER, (const void *)(intptr_t)(netinfo.sinr[i])) == -1)
+					return -1;
+			}
+	}
+
 
 	/*
 	 * The memory MIB: total/free memory (UCD-SNMP-MIB.txt)
