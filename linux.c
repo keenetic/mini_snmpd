@@ -316,6 +316,11 @@ void get_netinfo(netinfo_t *netinfo)
 			int imtu = NDM_MIN_MTU_;
 			int is_port = 0;
 
+			netinfo->rssi[i] = -254;
+			netinfo->rsrp[i] = -254;
+			netinfo->rsrq[i] = -254;
+			netinfo->sinr[i] = -254;
+
 			while (node != NULL) {
 				const char *cn = ndm_xml_node_name(node);
 				const char *cv = ndm_xml_node_value(node);
@@ -482,7 +487,7 @@ void get_netinfo(netinfo_t *netinfo)
 					continue;
 				}
 
-				if( !strcmp(cn, "sinr") )
+				if( !strcmp(cn, "cinr") )
 				{
 					if( strlen(cv) > 0 )
 					{
